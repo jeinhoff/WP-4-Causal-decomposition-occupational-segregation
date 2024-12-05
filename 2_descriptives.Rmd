@@ -1,0 +1,763 @@
+---
+title: "1_preprocessing"
+author: "Jan"
+date: "2024-01-25"
+---
+
+```{r setup}
+library("tidyverse")
+library("broom")
+library("Hmisc")
+
+rm(list = ls())
+
+```
+
+```{r}
+load("data/data_final.Rdata")
+
+prop.table(table(data_final$female)) * 100
+
+
+dat_female <- data_final %>% filter(female == 1)
+
+wtd.mean(as.numeric(dat_female$hh_size), w = dat_female$weight)
+round(sqrt(wtd.var(as.numeric(dat_female$hh_size), w = dat_female$weight)), 1)
+
+dat_male <- data_final %>% filter(female == 0)
+
+wtd.mean(as.numeric(dat_male$hh_size), w = dat_male$weight)
+round(sqrt(wtd.var(as.numeric(dat_male$hh_size), w = dat_male$weight)), 1)
+
+
+dat_female %>% 
+  mutate(total = sum(weight)) %>%
+  group_by(disability) %>%
+  summarise(prop = round(sum(weight) / total * 100, 1)) %>%
+  unique()
+
+```
+
+```{r}
+load("data/data_final.Rdata")
+
+preds <- data.frame(eseg_class = c("1", "2", "3", "4", "5", "6", "7"))
+
+# Employed
+model_em <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed", "Part-time employed") ~ 1, T ~ 0))
+
+model_em_female <- lm(outcome ~ eseg_class, model_em %>% filter(female == 1), weights = weight)
+model_em_female <- as.data.frame(predict(model_em_female, newdata = preds, interval = 'confidence', level = 0.95))
+model_em_female$eseg_class <- preds$eseg_class
+model_em_female$group <- "Female population"
+
+model_em_male <- lm(outcome ~ eseg_class, model_em %>% filter(female == 0), weights = weight)
+model_em_male <- as.data.frame(predict(model_em_male, newdata = preds, interval = 'confidence', level = 0.95))
+model_em_male$eseg_class <- preds$eseg_class
+model_em_male$group <- "Male population"
+
+model_em <- rbind(model_em_female, model_em_male)
+model_em$outcome <- "Employed (total)"
+
+# Employed
+model_ft <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed") ~ 1, T ~ 0))
+
+model_ft_female <- lm(outcome ~ eseg_class, model_ft %>% filter(female == 1), weights = weight)
+model_ft_female <- as.data.frame(predict(model_ft_female, newdata = preds, interval = 'confidence', level = 0.95))
+model_ft_female$eseg_class <- preds$eseg_class
+model_ft_female$group <- "Female population"
+
+model_ft_male <- lm(outcome ~ eseg_class, model_ft %>% filter(female == 0), weights = weight)
+model_ft_male <- as.data.frame(predict(model_ft_male, newdata = preds, interval = 'confidence', level = 0.95))
+model_ft_male$eseg_class <- preds$eseg_class
+model_ft_male$group <- "Male population"
+
+model_ft <- rbind(model_ft_female, model_ft_male)
+model_ft$outcome <- "Full-time employed"
+
+# Employed
+model_pt <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Part-time employed") ~ 1, T ~ 0))
+
+model_pt_female <- lm(outcome ~ eseg_class, model_pt %>% filter(female == 1), weights = weight)
+model_pt_female <- as.data.frame(predict(model_pt_female, newdata = preds, interval = 'confidence', level = 0.95))
+model_pt_female$eseg_class <- preds$eseg_class
+model_pt_female$group <- "Female population"
+
+model_pt_male <- lm(outcome ~ eseg_class, model_pt %>% filter(female == 0), weights = weight)
+model_pt_male <- as.data.frame(predict(model_pt_male, newdata = preds, interval = 'confidence', level = 0.95))
+model_pt_male$eseg_class <- preds$eseg_class
+model_pt_male$group <- "Male population"
+
+model_pt <- rbind(model_pt_female, model_pt_male)
+model_pt$outcome <- "Part-time employed"
+
+# Unemployed
+model_un <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Unemployed") ~ 1, T ~ 0))
+
+model_un_female <- lm(outcome ~ eseg_class, model_un %>% filter(female == 1), weights = weight)
+model_un_female <- as.data.frame(predict(model_un_female, newdata = preds, interval = 'confidence', level = 0.95))
+model_un_female$eseg_class <- preds$eseg_class
+model_un_female$group <- "Female population"
+
+model_un_male <- lm(outcome ~ eseg_class, model_un %>% filter(female == 0), weights = weight)
+model_un_male <- as.data.frame(predict(model_un_male, newdata = preds, interval = 'confidence', level = 0.95))
+model_un_male$eseg_class <- preds$eseg_class
+model_un_male$group <- "Male population"
+
+model_un <- rbind(model_un_female, model_un_male)
+model_un$outcome <- "Unemployed"
+
+# Inactive
+model_in <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Inactive") ~ 1, T ~ 0))
+
+model_in_female <- lm(outcome ~ eseg_class, model_in %>% filter(female == 1), weights = weight)
+model_in_female <- as.data.frame(predict(model_in_female, newdata = preds, interval = 'confidence', level = 0.95))
+model_in_female$eseg_class <- preds$eseg_class
+model_in_female$group <- "Female population"
+
+model_in_male <- lm(outcome ~ eseg_class, model_in %>% filter(female == 0), weights = weight)
+model_in_male <- as.data.frame(predict(model_in_male, newdata = preds, interval = 'confidence', level = 0.95))
+model_in_male$eseg_class <- preds$eseg_class
+model_in_male$group <- "Male population"
+
+model_in <- rbind(model_pt_female, model_in_male)
+model_in$outcome <- "Inactive"
+
+# Retired
+model_re <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Retired") ~ 1, T ~ 0))
+
+model_re_female <- lm(outcome ~ eseg_class, model_re %>% filter(female == 1), weights = weight)
+model_re_female <- as.data.frame(predict(model_re_female, newdata = preds, interval = 'confidence', level = 0.95))
+model_re_female$eseg_class <- preds$eseg_class
+model_re_female$group <- "Female population"
+
+model_re_male <- lm(outcome ~ eseg_class, model_re %>% filter(female == 0), weights = weight)
+model_re_male <- as.data.frame(predict(model_re_male, newdata = preds, interval = 'confidence', level = 0.95))
+model_re_male$eseg_class <- preds$eseg_class
+model_re_male$group <- "Male population"
+
+model_re <- rbind(model_pt_female, model_re_male)
+model_re$outcome <- "Retired"
+
+all <- rbind(model_em, model_ft, model_pt, model_un, model_in, model_re)
+
+ggplot(all) +
+  geom_bar(aes(y = fit, x = eseg_class, group = group, fill = group), width = 0.4, stat = "identity", position=position_dodge(0.5), alpha = 0.75) +
+  geom_errorbar(aes(y = fit, x = eseg_class, ymin = lwr, ymax = upr, group = group), position=position_dodge(0.5), width = 0.1) +
+  facet_wrap(~outcome, strip.position = "top", scales = "free_y", ncol = 3) +
+  scale_y_continuous("Prevalence (Ages 55 to 64)", labels = scales::percent) +
+  scale_x_discrete(NULL) +
+  theme_linedraw() +
+  geom_hline(yintercept = 0, color = "black") +
+  theme(legend.position = "bottom", 
+        legend.title=element_blank(), 
+        text = element_text(colour = "black", family = "Arial"),
+        axis.title.x = element_text(colour = "black", family = "Arial", face = "bold"),
+        axis.title.y = element_text(colour = "black", family = "Arial", face = "bold", size = 12),
+        axis.text.x = element_text(colour = "black", family = "Arial"),
+        axis.text.y = element_text(colour = "black", family = "Arial")) +
+  scale_fill_brewer(palette = "Set1")
+ggsave("outputs/plot_prevalence_by_group.pdf", width = 8, height = 6, device = cairo_pdf)
+
+```
+
+```{r}
+load("data/data_final.Rdata")
+
+preds <- data.frame(female = c("1", "0"))
+
+model_em <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed", "Part-time employed") ~ 1, T ~ 0))
+model_em <- lm(outcome ~ female, model_em, weights = weight)
+diff_em <- tidy(model_em)
+diff_em <- diff_em %>% slice(2) %>% mutate(outcome = "Employed\n (total)", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_em <- as.data.frame(predict(model_em, newdata = preds, interval = 'confidence', level = 0.95))
+model_em$gender <- c("Women", "Men")
+model_em$outcome <- "Employed\n (total)"
+
+model_ft <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed") ~ 1, T ~ 0))
+model_ft <- lm(outcome ~ female, model_ft, weights = weight)
+diff_ft <- tidy(model_ft)
+diff_ft <- diff_ft %>% slice(2) %>% mutate(outcome = "Full-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_ft <- as.data.frame(predict(model_ft, newdata = preds, interval = 'confidence', level = 0.95))
+model_ft$gender <- c("Women", "Men")
+model_ft$outcome <- "Full-time\n employed"
+
+model_pt <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Part-time employed") ~ 1, T ~ 0))
+model_pt <- lm(outcome ~ female, model_pt, weights = weight)
+diff_pt <- tidy(model_pt)
+diff_pt <- diff_pt %>% slice(2) %>% mutate(outcome = "Part-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_pt <- as.data.frame(predict(model_pt, newdata = preds, interval = 'confidence', level = 0.95))
+model_pt$gender <- c("Women", "Men")
+model_pt$outcome <- "Part-time\n employed"
+
+model_un <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Unemployed") ~ 1, T ~ 0))
+model_un <- lm(outcome ~ female, model_un, weights = weight)
+diff_un <- tidy(model_un)
+diff_un <- diff_un %>% slice(2) %>% mutate(outcome = "Unemployed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_un <- as.data.frame(predict(model_un, newdata = preds, interval = 'confidence', level = 0.95))
+model_un$gender <- c("Women", "Men")
+model_un$outcome <- "Unemployed"
+
+model_re <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Retired") ~ 1, T ~ 0))
+model_re <- lm(outcome ~ female, model_re, weights = weight)
+diff_re <- tidy(model_re)
+diff_re <- diff_re %>% slice(2) %>% mutate(outcome = "Retired", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_re <- as.data.frame(predict(model_re, newdata = preds, interval = 'confidence', level = 0.95))
+model_re$gender <- c("Women", "Men")
+model_re$outcome <- "Retired"
+
+model_in <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Inactive") ~ 1, T ~ 0))
+model_in <- lm(outcome ~ female, model_in, weights = weight)
+diff_in <- tidy(model_in)
+diff_in <- diff_in %>% slice(2) %>% mutate(outcome = "Inactive", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_in <- as.data.frame(predict(model_in, newdata = preds, interval = 'confidence', level = 0.95))
+model_in$gender <- c("Women", "Men")
+model_in$outcome <- "Inactive"
+
+preds <- rbind(model_em, model_ft, model_pt, model_un, model_re, model_in)
+diffs <- rbind(diff_em, diff_ft, diff_pt, diff_un, diff_re, diff_in)
+
+preds$title <- "Total population"
+diffs$title <- "Total population"
+
+```
+
+```{r}
+ggplot() +
+  geom_bar(data = diffs, aes(x = reorder(outcome, estimate), y = estimate, fill = "Gender gap"), width = 0.3, stat = "identity") +
+  geom_errorbar(data = diffs, aes(x = reorder(outcome, estimate), y = estimate, ymin = lwr, ymax = upr), width = 0.1) +
+  geom_errorbar(data = preds, aes(x = reorder(outcome, -fit), y = fit, ymin = lwr, ymax = upr, color = gender), width = 0.2, position = position_dodge(0.3)) +
+  geom_point(data = preds, aes(x = reorder(outcome, -fit), y = fit, color = gender), size = 0.5, position = position_dodge(0.3)) +
+  facet_grid(.~title) +
+  scale_y_continuous("Prevalence (Ages 55 to 64)", breaks = seq(-1, 1, 0.1), labels = scales::percent) +
+  scale_x_discrete(NULL) +
+  theme_linedraw() +
+  geom_hline(yintercept = 0, color = "black") +
+  theme(legend.position = "bottom", 
+        legend.title=element_blank(), 
+        text = element_text(colour = "black", family = "Arial"),
+        axis.title.x = element_text(colour = "black", family = "Arial", face = "bold"),
+        axis.title.y = element_text(colour = "black", family = "Arial", face = "bold", size = 12),
+        axis.text.x = element_text(colour = "black", family = "Arial"),
+        axis.text.y = element_text(colour = "black", family = "Arial")) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_color_brewer(palette = "Set1") +
+  coord_cartesian(ylim = c(-0.4, 0.8))
+ggsave("outputs/plot_disparities.pdf", height = 6, width = 5, device = cairo_pdf)
+
+rm(list = ls())
+
+```
+
+```{r}
+load("data/data_final.Rdata")
+
+data_final <- data_final %>% filter(year %in% c(1991:2000))
+
+preds <- data.frame(female = c("1", "0"))
+
+model_em <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed", "Part-time employed") ~ 1, T ~ 0))
+model_em <- lm(outcome ~ female, model_em, weights = weight)
+diff_em <- tidy(model_em)
+diff_em <- diff_em %>% slice(2) %>% mutate(outcome = "Employed\n (total)", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_em <- as.data.frame(predict(model_em, newdata = preds, interval = 'confidence', level = 0.95))
+model_em$gender <- c("Women", "Men")
+model_em$outcome <- "Employed\n (total)"
+
+model_ft <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed") ~ 1, T ~ 0))
+model_ft <- lm(outcome ~ female, model_ft, weights = weight)
+diff_ft <- tidy(model_ft)
+diff_ft <- diff_ft %>% slice(2) %>% mutate(outcome = "Full-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_ft <- as.data.frame(predict(model_ft, newdata = preds, interval = 'confidence', level = 0.95))
+model_ft$gender <- c("Women", "Men")
+model_ft$outcome <- "Full-time\n employed"
+
+model_pt <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Part-time employed") ~ 1, T ~ 0))
+model_pt <- lm(outcome ~ female, model_pt, weights = weight)
+diff_pt <- tidy(model_pt)
+diff_pt <- diff_pt %>% slice(2) %>% mutate(outcome = "Part-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_pt <- as.data.frame(predict(model_pt, newdata = preds, interval = 'confidence', level = 0.95))
+model_pt$gender <- c("Women", "Men")
+model_pt$outcome <- "Part-time\n employed"
+
+model_un <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Unemployed") ~ 1, T ~ 0))
+model_un <- lm(outcome ~ female, model_un, weights = weight)
+diff_un <- tidy(model_un)
+diff_un <- diff_un %>% slice(2) %>% mutate(outcome = "Un-\nemployed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_un <- as.data.frame(predict(model_un, newdata = preds, interval = 'confidence', level = 0.95))
+model_un$gender <- c("Women", "Men")
+model_un$outcome <- "Un-\nemployed"
+
+model_re <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Retired") ~ 1, T ~ 0))
+model_re <- lm(outcome ~ female, model_re, weights = weight)
+diff_re <- tidy(model_re)
+diff_re <- diff_re %>% slice(2) %>% mutate(outcome = "Retired", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_re <- as.data.frame(predict(model_re, newdata = preds, interval = 'confidence', level = 0.95))
+model_re$gender <- c("Women", "Men")
+model_re$outcome <- "Retired"
+
+model_in <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Inactive") ~ 1, T ~ 0))
+model_in <- lm(outcome ~ female, model_in, weights = weight)
+diff_in <- tidy(model_in)
+diff_in <- diff_in %>% slice(2) %>% mutate(outcome = "Inactive", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_in <- as.data.frame(predict(model_in, newdata = preds, interval = 'confidence', level = 0.95))
+model_in$gender <- c("Women", "Men")
+model_in$outcome <- "Inactive"
+
+preds_1990_2000 <- rbind(model_em, model_ft, model_pt, model_un, model_re, model_in)
+diffs_1990_2000 <- rbind(diff_em, diff_ft, diff_pt, diff_un, diff_re, diff_in)
+
+preds_1990_2000$period <- "1991-2000"
+diffs_1990_2000$period <- "1991-2000"
+
+rm(list = setdiff(ls(), c("preds_1990_2000", "diffs_1990_2000", "preds_2000_2010", "diffs_2000_2010", "preds_2010_2020", "diffs_2010_2020")))
+
+```
+
+```{r}
+load("data/data_final.Rdata")
+
+data_final <- data_final %>% filter(year %in% c(2000:2010))
+
+preds <- data.frame(female = c("1", "0"))
+
+model_em <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed", "Part-time employed") ~ 1, T ~ 0))
+model_em <- lm(outcome ~ female, model_em, weights = weight)
+diff_em <- tidy(model_em)
+diff_em <- diff_em %>% slice(2) %>% mutate(outcome = "Employed\n (total)", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_em <- as.data.frame(predict(model_em, newdata = preds, interval = 'confidence', level = 0.95))
+model_em$gender <- c("Women", "Men")
+model_em$outcome <- "Employed\n (total)"
+
+model_ft <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed") ~ 1, T ~ 0))
+model_ft <- lm(outcome ~ female, model_ft, weights = weight)
+diff_ft <- tidy(model_ft)
+diff_ft <- diff_ft %>% slice(2) %>% mutate(outcome = "Full-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_ft <- as.data.frame(predict(model_ft, newdata = preds, interval = 'confidence', level = 0.95))
+model_ft$gender <- c("Women", "Men")
+model_ft$outcome <- "Full-time\n employed"
+
+model_pt <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Part-time employed") ~ 1, T ~ 0))
+model_pt <- lm(outcome ~ female, model_pt, weights = weight)
+diff_pt <- tidy(model_pt)
+diff_pt <- diff_pt %>% slice(2) %>% mutate(outcome = "Part-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_pt <- as.data.frame(predict(model_pt, newdata = preds, interval = 'confidence', level = 0.95))
+model_pt$gender <- c("Women", "Men")
+model_pt$outcome <- "Part-time\n employed"
+
+model_un <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Unemployed") ~ 1, T ~ 0))
+model_un <- lm(outcome ~ female, model_un, weights = weight)
+diff_un <- tidy(model_un)
+diff_un <- diff_un %>% slice(2) %>% mutate(outcome = "Un-\nemployed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_un <- as.data.frame(predict(model_un, newdata = preds, interval = 'confidence', level = 0.95))
+model_un$gender <- c("Women", "Men")
+model_un$outcome <- "Un-\nemployed"
+
+model_re <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Retired") ~ 1, T ~ 0))
+model_re <- lm(outcome ~ female, model_re, weights = weight)
+diff_re <- tidy(model_re)
+diff_re <- diff_re %>% slice(2) %>% mutate(outcome = "Retired", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_re <- as.data.frame(predict(model_re, newdata = preds, interval = 'confidence', level = 0.95))
+model_re$gender <- c("Women", "Men")
+model_re$outcome <- "Retired"
+
+model_in <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Inactive") ~ 1, T ~ 0))
+model_in <- lm(outcome ~ female, model_in, weights = weight)
+diff_in <- tidy(model_in)
+diff_in <- diff_in %>% slice(2) %>% mutate(outcome = "Inactive", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_in <- as.data.frame(predict(model_in, newdata = preds, interval = 'confidence', level = 0.95))
+model_in$gender <- c("Women", "Men")
+model_in$outcome <- "Inactive"
+
+preds_2000_2010 <- rbind(model_em, model_ft, model_pt, model_un, model_re, model_in)
+diffs_2000_2010 <- rbind(diff_em, diff_ft, diff_pt, diff_un, diff_re, diff_in)
+
+preds_2000_2010$period <- "2000-2010"
+diffs_2000_2010$period <- "2000-2010"
+
+rm(list = setdiff(ls(), c("preds_1990_2000", "diffs_1990_2000", "preds_2000_2010", "diffs_2000_2010", "preds_2010_2020", "diffs_2010_2020")))
+
+```
+
+```{r}
+load("data/data_final.Rdata")
+
+data_final <- data_final %>% filter(year %in% c(2010:2020))
+
+preds <- data.frame(female = c("1", "0"))
+
+model_em <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed", "Part-time employed") ~ 1, T ~ 0))
+model_em <- lm(outcome ~ female, model_em, weights = weight)
+diff_em <- tidy(model_em)
+diff_em <- diff_em %>% slice(2) %>% mutate(outcome = "Employed\n (total)", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_em <- as.data.frame(predict(model_em, newdata = preds, interval = 'confidence', level = 0.95))
+model_em$gender <- c("Women", "Men")
+model_em$outcome <- "Employed\n (total)"
+
+model_ft <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed") ~ 1, T ~ 0))
+model_ft <- lm(outcome ~ female, model_ft, weights = weight)
+diff_ft <- tidy(model_ft)
+diff_ft <- diff_ft %>% slice(2) %>% mutate(outcome = "Full-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_ft <- as.data.frame(predict(model_ft, newdata = preds, interval = 'confidence', level = 0.95))
+model_ft$gender <- c("Women", "Men")
+model_ft$outcome <- "Full-time\n employed"
+
+model_pt <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Part-time employed") ~ 1, T ~ 0))
+model_pt <- lm(outcome ~ female, model_pt, weights = weight)
+diff_pt <- tidy(model_pt)
+diff_pt <- diff_pt %>% slice(2) %>% mutate(outcome = "Part-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_pt <- as.data.frame(predict(model_pt, newdata = preds, interval = 'confidence', level = 0.95))
+model_pt$gender <- c("Women", "Men")
+model_pt$outcome <- "Part-time\n employed"
+
+model_un <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Unemployed") ~ 1, T ~ 0))
+model_un <- lm(outcome ~ female, model_un, weights = weight)
+diff_un <- tidy(model_un)
+diff_un <- diff_un %>% slice(2) %>% mutate(outcome = "Un-\nemployed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_un <- as.data.frame(predict(model_un, newdata = preds, interval = 'confidence', level = 0.95))
+model_un$gender <- c("Women", "Men")
+model_un$outcome <- "Un-\nemployed"
+
+model_re <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Retired") ~ 1, T ~ 0))
+model_re <- lm(outcome ~ female, model_re, weights = weight)
+diff_re <- tidy(model_re)
+diff_re <- diff_re %>% slice(2) %>% mutate(outcome = "Retired", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_re <- as.data.frame(predict(model_re, newdata = preds, interval = 'confidence', level = 0.95))
+model_re$gender <- c("Women", "Men")
+model_re$outcome <- "Retired"
+
+model_in <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Inactive") ~ 1, T ~ 0))
+model_in <- lm(outcome ~ female, model_in, weights = weight)
+diff_in <- tidy(model_in)
+diff_in <- diff_in %>% slice(2) %>% mutate(outcome = "Inactive", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_in <- as.data.frame(predict(model_in, newdata = preds, interval = 'confidence', level = 0.95))
+model_in$gender <- c("Women", "Men")
+model_in$outcome <- "Inactive"
+
+preds_2010_2020 <- rbind(model_em, model_ft, model_pt, model_un, model_re, model_in)
+diffs_2010_2020 <- rbind(diff_em, diff_ft, diff_pt, diff_un, diff_re, diff_in)
+
+preds_2010_2020$period <- "2010-2020"
+diffs_2010_2020$period <- "2010-2020"
+
+rm(list = setdiff(ls(), c("preds_1990_2000", "diffs_1990_2000", "preds_2000_2010", "diffs_2000_2010", "preds_2010_2020", "diffs_2010_2020")))
+
+```
+
+```{r}
+preds <- rbind(preds_1990_2000, preds_2000_2010, preds_2010_2020)
+diffs <- rbind(diffs_1990_2000, diffs_2000_2010, diffs_2010_2020)
+
+```
+
+```{r}
+library("tidytext")
+ggplot() +
+  geom_bar(data = diffs, aes(x = reorder_within(outcome, estimate, period), y = estimate, fill = "Gender gap"), width = 0.3, stat = "identity") +
+  geom_errorbar(data = diffs, aes(x = reorder_within(outcome, estimate, period), y = estimate, ymin = lwr, ymax = upr), width = 0.1) +
+  geom_errorbar(data = preds, aes(x = reorder_within(outcome, fit, period), y = fit, ymin = lwr, ymax = upr, color = gender), width = 0.2, position = position_dodge(0.3)) +
+  geom_point(data = preds, aes(x = reorder_within(outcome, fit, period), y = fit, color = gender), size = 0.5, position = position_dodge(0.3)) +
+  facet_wrap(.~period, scales = "free_x") +
+  scale_y_continuous("Prevalence (Ages 55 to 64)", breaks = seq(-1, 1, 0.1), labels = scales::percent) +
+  scale_x_reordered(NULL) +
+  theme_linedraw() +
+  geom_hline(yintercept = 0, color = "black") +
+  theme(legend.position = "bottom", 
+        legend.title=element_blank(), 
+        text = element_text(colour = "black", family = "Arial"),
+        axis.title.x = element_text(colour = "black", family = "Arial", face = "bold"),
+        axis.title.y = element_text(colour = "black", family = "Arial", face = "bold", size = 12),
+        axis.text.x = element_text(colour = "black", family = "Arial"),
+        axis.text.y = element_text(colour = "black", family = "Arial")) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_color_brewer(palette = "Set1") +
+  coord_cartesian(ylim = c(-0.4, 0.8))
+ggsave("outputs/plot_disparities_period.pdf", height = 6, width = 11, device = cairo_pdf)
+
+```
+
+```{r}
+load("data/data_final.Rdata")
+
+data_final <- data_final %>% filter(region == "East Germany")
+
+preds <- data.frame(female = c("1", "0"))
+
+model_em <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed", "Part-time employed") ~ 1, T ~ 0))
+model_em <- lm(outcome ~ female, model_em, weights = weight)
+diff_em <- tidy(model_em)
+diff_em <- diff_em %>% slice(2) %>% mutate(outcome = "Employed\n (total)", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_em <- as.data.frame(predict(model_em, newdata = preds, interval = 'confidence', level = 0.95))
+model_em$gender <- c("Women", "Men")
+model_em$outcome <- "Employed\n (total)"
+
+model_ft <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed") ~ 1, T ~ 0))
+model_ft <- lm(outcome ~ female, model_ft, weights = weight)
+diff_ft <- tidy(model_ft)
+diff_ft <- diff_ft %>% slice(2) %>% mutate(outcome = "Full-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_ft <- as.data.frame(predict(model_ft, newdata = preds, interval = 'confidence', level = 0.95))
+model_ft$gender <- c("Women", "Men")
+model_ft$outcome <- "Full-time\n employed"
+
+model_pt <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Part-time employed") ~ 1, T ~ 0))
+model_pt <- lm(outcome ~ female, model_pt, weights = weight)
+diff_pt <- tidy(model_pt)
+diff_pt <- diff_pt %>% slice(2) %>% mutate(outcome = "Part-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_pt <- as.data.frame(predict(model_pt, newdata = preds, interval = 'confidence', level = 0.95))
+model_pt$gender <- c("Women", "Men")
+model_pt$outcome <- "Part-time\n employed"
+
+model_un <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Unemployed") ~ 1, T ~ 0))
+model_un <- lm(outcome ~ female, model_un, weights = weight)
+diff_un <- tidy(model_un)
+diff_un <- diff_un %>% slice(2) %>% mutate(outcome = "Un-\nemployed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_un <- as.data.frame(predict(model_un, newdata = preds, interval = 'confidence', level = 0.95))
+model_un$gender <- c("Women", "Men")
+model_un$outcome <- "Un-\nemployed"
+
+model_re <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Retired") ~ 1, T ~ 0))
+model_re <- lm(outcome ~ female, model_re, weights = weight)
+diff_re <- tidy(model_re)
+diff_re <- diff_re %>% slice(2) %>% mutate(outcome = "Retired", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_re <- as.data.frame(predict(model_re, newdata = preds, interval = 'confidence', level = 0.95))
+model_re$gender <- c("Women", "Men")
+model_re$outcome <- "Retired"
+
+model_in <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Inactive") ~ 1, T ~ 0))
+model_in <- lm(outcome ~ female, model_in, weights = weight)
+diff_in <- tidy(model_in)
+diff_in <- diff_in %>% slice(2) %>% mutate(outcome = "Inactive", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_in <- as.data.frame(predict(model_in, newdata = preds, interval = 'confidence', level = 0.95))
+model_in$gender <- c("Women", "Men")
+model_in$outcome <- "Inactive"
+
+preds_east <- rbind(model_em, model_ft, model_pt, model_un, model_re, model_in)
+diffs_east <- rbind(diff_em, diff_ft, diff_pt, diff_un, diff_re, diff_in)
+
+preds_east$region <- "East Germany"
+diffs_east$region <- "East Germany"
+
+rm(list = setdiff(ls(), c("preds_west", "diffs_west", "preds_east", "diffs_east")))
+
+```
+
+```{r}
+load("data/data_final.Rdata")
+
+data_final <- data_final %>% filter(region == "West Germany")
+
+preds <- data.frame(female = c("1", "0"))
+
+model_em <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed", "Part-time employed") ~ 1, T ~ 0))
+model_em <- lm(outcome ~ female, model_em, weights = weight)
+diff_em <- tidy(model_em)
+diff_em <- diff_em %>% slice(2) %>% mutate(outcome = "Employed\n (total)", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_em <- as.data.frame(predict(model_em, newdata = preds, interval = 'confidence', level = 0.95))
+model_em$gender <- c("Women", "Men")
+model_em$outcome <- "Employed\n (total)"
+
+model_ft <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Full-time employed") ~ 1, T ~ 0))
+model_ft <- lm(outcome ~ female, model_ft, weights = weight)
+diff_ft <- tidy(model_ft)
+diff_ft <- diff_ft %>% slice(2) %>% mutate(outcome = "Full-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_ft <- as.data.frame(predict(model_ft, newdata = preds, interval = 'confidence', level = 0.95))
+model_ft$gender <- c("Women", "Men")
+model_ft$outcome <- "Full-time\n employed"
+
+model_pt <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Part-time employed") ~ 1, T ~ 0))
+model_pt <- lm(outcome ~ female, model_pt, weights = weight)
+diff_pt <- tidy(model_pt)
+diff_pt <- diff_pt %>% slice(2) %>% mutate(outcome = "Part-time\n employed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_pt <- as.data.frame(predict(model_pt, newdata = preds, interval = 'confidence', level = 0.95))
+model_pt$gender <- c("Women", "Men")
+model_pt$outcome <- "Part-time\n employed"
+
+model_un <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Unemployed") ~ 1, T ~ 0))
+model_un <- lm(outcome ~ female, model_un, weights = weight)
+diff_un <- tidy(model_un)
+diff_un <- diff_un %>% slice(2) %>% mutate(outcome = "Un-\nemployed", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_un <- as.data.frame(predict(model_un, newdata = preds, interval = 'confidence', level = 0.95))
+model_un$gender <- c("Women", "Men")
+model_un$outcome <- "Un-\nemployed"
+
+model_re <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Retired") ~ 1, T ~ 0))
+model_re <- lm(outcome ~ female, model_re, weights = weight)
+diff_re <- tidy(model_re)
+diff_re <- diff_re %>% slice(2) %>% mutate(outcome = "Retired", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_re <- as.data.frame(predict(model_re, newdata = preds, interval = 'confidence', level = 0.95))
+model_re$gender <- c("Women", "Men")
+model_re$outcome <- "Retired"
+
+model_in <- data_final %>% mutate(outcome = case_when(employment_status %in% c("Inactive") ~ 1, T ~ 0))
+model_in <- lm(outcome ~ female, model_in, weights = weight)
+diff_in <- tidy(model_in)
+diff_in <- diff_in %>% slice(2) %>% mutate(outcome = "Inactive", lwr = estimate - 1.96 * std.error, upr = estimate + 1.96 * std.error) %>% select(outcome, term, estimate, lwr, upr)
+model_in <- as.data.frame(predict(model_in, newdata = preds, interval = 'confidence', level = 0.95))
+model_in$gender <- c("Women", "Men")
+model_in$outcome <- "Inactive"
+
+preds_west <- rbind(model_em, model_ft, model_pt, model_un, model_re, model_in)
+diffs_west <- rbind(diff_em, diff_ft, diff_pt, diff_un, diff_re, diff_in)
+
+preds_west$region <- "West Germany"
+diffs_west$region <- "West Germany"
+
+rm(list = setdiff(ls(), c("preds_west", "diffs_west", "preds_east", "diffs_east")))
+
+```
+
+```{r}
+preds <- rbind(preds_west, preds_east)
+diffs <- rbind(diffs_west, diffs_east)
+
+```
+
+```{r}
+ggplot() +
+  geom_bar(data = diffs, aes(x = reorder_within(outcome, estimate, region), y = estimate, fill = "Gender gap"), width = 0.3, stat = "identity") +
+  geom_errorbar(data = diffs, aes(x = reorder_within(outcome, estimate, region), y = estimate, ymin = lwr, ymax = upr), width = 0.1) +
+  geom_errorbar(data = preds, aes(x = reorder_within(outcome, fit, region), y = fit, ymin = lwr, ymax = upr, color = gender), width = 0.2, position = position_dodge(0.3)) +
+  geom_point(data = preds, aes(x = reorder_within(outcome, fit, region), y = fit, color = gender), size = 0.5, position = position_dodge(0.3)) +
+  facet_wrap(.~region, scales = "free_x") +
+  scale_y_continuous("Prevalence (Ages 55 to 64)", breaks = seq(-1, 1, 0.1), labels = scales::percent) +
+  scale_x_reordered(NULL) +
+  theme_linedraw() +
+  geom_hline(yintercept = 0, color = "black") +
+  theme(legend.position = "bottom", 
+        legend.title=element_blank(), 
+        text = element_text(colour = "black", family = "Arial"),
+        axis.title.x = element_text(colour = "black", family = "Arial", face = "bold"),
+        axis.title.y = element_text(colour = "black", family = "Arial", face = "bold", size = 12),
+        axis.text.x = element_text(colour = "black", family = "Arial"),
+        axis.text.y = element_text(colour = "black", family = "Arial")) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_color_brewer(palette = "Set1") +
+  coord_cartesian(ylim = c(-0.4, 0.8))
+ggsave("outputs/plot_disparities_region.pdf", height = 6, width = 7.5, device = cairo_pdf)
+
+```
+
+# composition
+```{r}
+rm(list = ls())
+
+load("data/data_final.Rdata")
+
+occ_comp_observed <- data_final %>%
+    group_by(female, education_level) %>%
+    mutate(total = sum(weight)) %>%
+    group_by(female, education_level, eseg_class_title) %>%
+    mutate(total_occupation = sum(weight),
+           share_occupation = total_occupation / total) %>%
+    select(female, education_level, eseg_class_title, share_occupation) %>%
+    unique() %>% na.omit()
+
+occ_comp_counter <- data_final %>% na.omit() %>%
+    group_by(education_level) %>%
+    mutate(total = sum(weight)) %>%
+    group_by(education_level, eseg_class_title) %>%
+    mutate(total_occupation = sum(weight),
+           share_occupation = total_occupation / total) %>%
+    select(education_level, eseg_class_title, share_occupation) %>%
+    unique()
+
+occ_comp_observed$female <- ifelse(occ_comp_observed$female == 1, "Female", "Male")
+
+occ_comp_observed <- occ_comp_observed %>%
+  mutate(
+    education_level = case_when(
+      education_level %in% c("Low") ~ "Low education",
+      education_level %in% c("Medium") ~ "Medium education",
+      education_level %in% c("High") ~ "High education"),
+    education_level = factor(education_level),
+    education_level = fct_relevel(education_level,c("Low education", "Medium education", "High education")))
+
+occ_comp_counter <- occ_comp_counter %>%
+  mutate(
+    education_level = case_when(
+      education_level %in% c("Low") ~ "Low education",
+      education_level %in% c("Medium") ~ "Medium education",
+      education_level %in% c("High") ~ "High education"),
+    education_level = factor(education_level),
+    education_level = fct_relevel(education_level,c("Low education", "Medium education", "High education")))
+
+ggplot() +
+  geom_bar(data = occ_comp_observed %>% mutate(label = "Observed"), 
+           aes(y = female, x = share_occupation, fill = eseg_class_title), 
+           position = "fill", stat = "identity", width = 0.7) +
+  geom_bar(data = occ_comp_counter %>% mutate(label = "Equalised"), 
+           aes(y = "Total", x = share_occupation, fill = eseg_class_title), 
+           position = "fill", stat = "identity", width = 0.7) +
+  facet_grid(factor(label) ~ education_level, scales = "free", space = "free") +
+  scale_x_continuous("Share of occupation group", breaks = seq(0, 1, 0.2), labels = scales::percent) +
+  scale_y_discrete("") +
+  theme_linedraw() +
+  theme(legend.position = "bottom", 
+        text = element_text(colour = "black", family = "Arial"),
+        legend.title = element_text(colour = "black", family = "Arial", face = "bold"),
+        axis.title.x = element_text(colour = "black", family = "Arial", face = "bold"),
+        axis.title.y = element_text(colour = "black", family = "Arial", face = "bold", size = 12),
+        axis.text.x = element_text(colour = "black", family = "Arial"),
+        axis.text.y = element_text(colour = "black", family = "Arial")) +
+  guides(fill = guide_legend(ncol = 2, title="Occupation\ngroup")) +
+  scale_fill_brewer(palette = "Set1")
+ggsave("outputs/plot_occupation_composition.pdf", width = 9, height = 4.5, device = cairo_pdf)
+
+```
+
+# propensity scores
+```{r}
+load("data/data_final.Rdata")
+
+formula_treatment <- formula("eseg_class ~ age + region + as.numeric(year) + female + urban_residence + education_level + disability + marital_status + hh_size + partner_in_hh + n_children + foreign_born + lm_expr_ft + lm_expr_pt")
+
+# male
+data_male <- data_final %>% filter(female == 0)
+
+model_male <- multinom(formula_treatment, data = data_final, family = "binomial", weights = weight)
+  
+prob_occupation_male <- as.data.frame(predict(model_male, newdata = data_male, type = "probs"))
+
+colnames(prob_occupation_male) <- paste0("prop_occ_", colnames(prob_occupation_male))
+
+data_male <- cbind(data_male, prob_occupation_male)
+
+# female
+data_female <- data_final %>% filter(female == 1)
+
+model_female <- multinom(formula_treatment, data = data_final, family = "binomial", weights = weight)
+  
+prob_occupation_female <- as.data.frame(predict(model_female, newdata = data_female, type = "probs"))
+  
+colnames(prob_occupation_female) <- paste0("prop_occ_", colnames(prob_occupation_female))
+  
+data_female <- cbind(data_female, prob_occupation_female)
+
+# combine
+data_final <- rbind(data_male, data_female)
+
+propensity_scores <- prob_occupation_female %>% pivot_longer(1:7) %>% rbind(prob_occupation_male %>% pivot_longer(1:7))
+
+ggplot() +
+  geom_histogram(data = prob_occupation_female %>% pivot_longer(1:7), aes(x = value, fill = "Female population"), alpha = .6, binwidth = 0.001) + 
+  geom_histogram(data = prob_occupation_male %>% pivot_longer(1:7), aes(x = value, fill = "Male population"), alpha = .6, binwidth = 0.001) + 
+  annotate("text", x = 0.62, y = 2000, hjust = 0, label = paste("Max.: ", round(max(propensity_scores$value), 5))) +
+  annotate("text", x = 0.62, y = 1850, hjust = 0, label = paste("Min.:  ", round(min(propensity_scores$value), 5))) +
+  scale_x_continuous("Propensity score", breaks = seq(0, 1, 0.1)) + 
+  scale_y_continuous("Frequency", breaks = seq(0, 100000, 250)) + 
+  theme_linedraw() +
+  theme(legend.position = "bottom", 
+        legend.title=element_blank(), 
+        text = element_text(colour = "black", family = "Arial"),
+        axis.title.x = element_text(colour = "black", family = "Arial", face = "bold"),
+        axis.title.y = element_text(colour = "black", family = "Arial", face = "bold", size = 12),
+        axis.text.x = element_text(colour = "black", family = "Arial"),
+        axis.text.y = element_text(colour = "black", family = "Arial")) +
+  scale_fill_brewer(palette = "Set1")
+ggsave("outputs/plot_propensity_scores.pdf", height = 4, width = 7, device = cairo_pdf)
+
+```
+
+```{r}
+
+```

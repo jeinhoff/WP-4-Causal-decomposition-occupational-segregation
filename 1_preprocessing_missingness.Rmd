@@ -1,0 +1,76 @@
+---
+title: "1_preprocessing"
+author: "Jan"
+date: "2024-01-25"
+---
+
+```{r setup}
+library("tidyverse")
+library("rio")
+library("tidyr")
+library("modelsummary")
+library("openxlsx")
+
+rm(list = ls())
+
+load("data/data_preprocessed.Rdata")
+
+```
+
+# Check missingness
+```{r}
+data_final %>% ungroup() %>%
+  select(everything()) %>%
+  summarise(across(everything(), ~ mean(is.na(.)) * 100))
+
+100 - nrow(data_final %>% select(-c("eseg_class_title", "eseg_class_2")) %>% na.omit()) / nrow(data_final) * 100
+
+```
+
+```{r}
+data_final <- data_final %>% filter(!is.na(age) & !is.na(year) & !is.na(female) & !is.na(region) & !is.na(urban_residence) & !is.na(education_level) & !is.na(disability) & !is.na(employment_status) & !is.na(employment_status_next_year) & !is.na(marital_status) & !is.na(hh_size) & !is.na(partner_in_hh) & !is.na(n_children) & !is.na(lm_expr_ft) & !is.na(lm_expr_pt) & !is.na(foreign_born) & !is.na(sampling_weight))
+
+data_final$occ_exists <- ifelse(is.na(data_final$eseg_class), 1, 0)
+
+formula_missing <- formula("occ_exists ~ age + year + region + female + urban_residence + education_level + disability + marital_status + hh_size + partner_in_hh + n_children + foreign_born + lm_expr_ft + lm_expr_pt")
+
+model_missingness <- glm(formula_missing, data = data_final, family = "quasibinomial", weights = sampling_weight)
+
+modelsummary(model_missingness, coef_omit = "age|year", estimate  = c("{estimate}{stars}"), output = "outputs/missingness_model.docx")
+
+data_final$inv_prob_complete <- predict(model_missingness, newdata = data_final, type = "response")
+
+data_final$inv_prob_complete <- (data_final$occ_exists / data_final$inv_prob_complete) + ((1 - data_final$occ_exists) / (1 - data_final$inv_prob_complete))
+
+data_final$weight <- data_final$sampling_weight * data_final$inv_prob_complete
+
+data_final <- data_final %>% select(-c("occ_exists")) %>% na.omit()
+
+rm(formula_missing, model_missingness)
+
+```
+
+```{r}
+save.image("data/data_final.Rdata")
+
+```
+
+```{r}
+ggplot() +
+  geom_histogram(data = data_final, aes(x = inv_prob_complete), binwidth = 0.02, color = "black", fill = "lightgrey") + 
+  annotate("text", x = 4.1, y = 21400, hjust = 0, label = paste("Max.: ", round(max(data_final$inv_prob_complete), 3))) +
+  annotate("text", x = 4.1, y = 20000, hjust = 0, label = paste("Min.: ", round(min(data_final$inv_prob_complete), 3))) +
+  scale_x_continuous("Inverse probability of complete occupation information", breaks = seq(0, 10, 0.5)) + 
+  scale_y_continuous("Frequency", breaks = seq(0, 100000, 5000)) + 
+  theme_linedraw() +
+  #coord_cartesian(xlim = c(1, 2)) +
+  theme(legend.position = "bottom", 
+        legend.title=element_blank(), 
+        text = element_text(colour = "black", family = "Arial"),
+        axis.title.x = element_text(colour = "black", family = "Arial", face = "bold"),
+        axis.title.y = element_text(colour = "black", family = "Arial", face = "bold", size = 12),
+        axis.text.x = element_text(colour = "black", family = "Arial"),
+        axis.text.y = element_text(colour = "black", family = "Arial"))
+ggsave("outputs/results_plots/plot_ipw_weights.pdf", height = 4, width = 7, device = cairo_pdf)
+
+```

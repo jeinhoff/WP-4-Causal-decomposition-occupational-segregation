@@ -1,0 +1,594 @@
+---
+title: "1_preprocessing"
+author: "Jan"
+date: "2024-01-25"
+---
+
+```{r setup}
+library("tidyverse")
+library("rio")
+library("tidyr")
+library("modelsummary")
+library("openxlsx")
+
+rm(list = ls())
+
+```
+
+```{r}
+data <- import("./data/data_soep/CPFv1.5.dta")
+
+data <- data %>% filter(country == 6)
+
+data <- data %>% select(orgpid, hid, intyear, intmonth, age, yborn, female, edu3, edu4, edu5, marstat5, mlstat5, parstat6, kidsn_all, livpart, isco88_4, isco08_4, indust1, indust2, indust3, selfemp, size4, retf, emplst5, emplst6, fptime_r, fptime_h, exporg, incjobs_yg, hhinc_post, nphh, migr, expft, exppt, srh5, disab, disab2c, chron, sampid_soep)
+
+data[data < 0] <- NA
+
+```
+
+# Birth month
+
+```{r}
+bmonth <- import("./data/data_soep/ppathl.dta")
+
+bmonth <- bmonth %>% select(pid, gebmonat) %>% rename("birth_month" = "gebmonat")
+
+bmonth[bmonth < 0] <- NA
+
+bmonth <- bmonth %>% unique()
+
+data <- data %>% left_join(bmonth, by = c("orgpid" = "pid"))
+
+rm(bmonth)
+
+```
+
+# Cohorts
+
+```{r}
+data <- data %>%
+  mutate(
+    cohort = case_when(
+      yborn %in% c(1891:1900) ~ "1891 to 1900",
+      yborn %in% c(1901:1910) ~ "1901 to 1910",
+      yborn %in% c(1911:1920) ~ "1911 to 1920",
+      yborn %in% c(1921:1930) ~ "1921 to 1930",
+      yborn %in% c(1931:1940) ~ "1931 to 1940",
+      yborn %in% c(1941:1950) ~ "1941 to 1950",
+      yborn %in% c(1951:1960) ~ "1951 to 1960",
+      yborn %in% c(1961:1970) ~ "1961 to 1970"))
+
+data <- data %>% rename("birth_year" = "yborn")
+
+```
+
+# Education
+
+```{r}
+data <- data %>%
+  mutate(
+    education_level = case_when(
+      edu4 %in% c(1, 2) ~ "Low",
+      edu4 %in% c(3) ~ "Medium",
+      edu4 %in% c(4) ~ "High"))
+
+```
+
+# Marital status
+
+```{r}
+data <- data %>%
+  mutate(
+    marital_status = case_when(
+      marstat5 %in% c(2) ~ "Single",
+      marstat5 %in% c(1) ~ "In partnership or married",
+      marstat5 %in% c(3, 4, 5) ~ "Widowed or divorced"))
+
+```
+
+# Partner in HH
+
+```{r}
+data <- data %>%
+  rename("partner_in_hh" = "livpart")
+
+```
+
+# HH size
+
+```{r}
+data <- data %>%
+  rename("hh_size" = "nphh")
+
+```
+
+# Number of children
+
+```{r}
+data <- data %>%
+  mutate(
+    n_children = case_when(
+      kidsn_all %in% c(0) ~ "No child",
+      kidsn_all %in% c(1) ~ "One child",
+      kidsn_all %in% c(2) ~ "Two children",
+      kidsn_all %in% c(3:999) ~ "Three or more children"))
+
+```
+
+# Migration background
+
+```{r}
+data <- data %>%
+  mutate(
+    foreign_born = case_when(
+      migr %in% c(0) ~ "Native-born",
+      migr %in% c(1) ~ "Foreign-born"))
+
+```
+
+# Disability
+
+```{r}
+data <- data %>% 
+  mutate(disability = case_when(
+    disab == 1 | disab2c == 1 ~ 1,
+    T ~ 0))
+
+```
+
+# Household income (equiv.)
+
+```{r}
+data <- data %>% mutate(hh_income_eq = hhinc_post / sqrt(hh_size))
+
+```
+
+# Individual gross earnings (log)
+
+```{r}
+data <- data %>% mutate(indv_earnings_log = log(incjobs_yg + 1))
+
+```
+
+# Employment status
+
+```{r}
+data <- data %>% 
+  mutate(employment_status = case_when(
+    emplst5 %in% c(1) & fptime_h %in% c(1) ~ "Full-time employed",
+    emplst5 %in% c(1) & fptime_h %in% c(2) ~ "Part-time employed",
+    emplst5 %in% c(2) ~ "Unemployed",
+    emplst5 %in% c(3, 4, 5) & retf %in% c(0) ~ "Inactive",
+    emplst5 %in% c(3) & retf %in% c(1) ~ "Retired"))
+
+```
+
+# Labour market experience
+
+```{r}
+data$lm_expr <- data$expft + data$exppt
+data$lm_expr_pt <- data$exppt
+data$lm_expr_ft <- data$expft
+
+```
+
+# Region
+
+```{r}
+region <- import("./data/data_soep/ppathl.dta")
+
+region <- region %>%
+  mutate(region = ifelse(sampreg == 1, "West Germany", "East Germany")) %>%
+  select(pid, syear, region)
+
+data <- data %>% left_join(region, by = c("orgpid" = "pid", "intyear" = "syear"))
+
+rm(region)
+
+```
+
+# Urban residence
+
+```{r}
+urban <- import("./data/data_soep/hhbrutto.dta")
+
+urban <- import("./data/data_soep/hbrutto.dta")
+
+urban <- urban %>%
+  mutate(urban_residence = ifelse(regtyp == 1, 1, 0)) %>%
+  select(hid, syear, urban_residence)
+
+data <- data %>% left_join(urban, by = c("hid" = "hid", "intyear" = "syear"))
+
+rm(urban)
+
+```
+
+# Sector: Public/Private
+
+```{r}
+public_sector <- import("./data/data_soep/pgen.dta")
+
+public_sector <- public_sector %>% select(pid, syear, pgoeffd)
+
+public_sector[public_sector < 0] <- NA
+
+#public_sector <- public_sector %>% group_by(pid) %>% fill(pgoeffd, .direction = c("downup"))
+
+public_sector <- public_sector %>% na.omit() %>%
+  mutate(public_sector = case_when(
+    pgoeffd %in% c(1) ~ "Public sector",
+    pgoeffd %in% c(2) ~ "Private sector"))
+
+data <- data %>% left_join(public_sector, by = c("orgpid" = "pid", "intyear" = "syear"))
+
+rm(public_sector)
+
+```
+
+# Industry
+
+```{r}
+data <- data %>%
+  mutate(industry = case_when(
+    indust2 %in% c(1) ~ "Agriculture",
+    indust2 %in% c(2) ~ "Energy",
+    indust2 %in% c(3) ~ "Mining",
+    indust2 %in% c(4) ~ "Manufacturing",
+    indust2 %in% c(5) ~ "Construction",
+    indust2 %in% c(6) ~ "Trade",
+    indust2 %in% c(7) ~ "Transport",
+    indust2 %in% c(8) ~ "Bank, Insurance",
+    indust2 %in% c(9) ~ "Services",
+    indust2 %in% c(10) ~ "Other"))
+
+```
+
+# Firm size
+
+```{r}
+firm_size <- import("./data/data_soep/pgen.dta")
+
+firm_size <- firm_size %>% select(pid, syear, pgbetr)
+
+firm_size[firm_size < 0] <- NA
+
+#firm_size <- firm_size %>% group_by(pid) %>% fill(pgbetr, .direction = c("downup"))
+
+firm_size <- firm_size %>% na.omit() %>%
+  mutate(firm_size = case_when(
+    pgbetr %in% c(11) ~ "None",
+    pgbetr %in% c(1, 2) ~ "Less than 10",
+    pgbetr %in% c(3, 4, 5, 6, 7, 8) ~ "11 to 199",
+    pgbetr %in% c(9) ~ "200 to 1999",
+    pgbetr %in% c(10) ~ "More than 2000",
+    T ~ "None"),
+    size10 = case_when(
+    pgbetr %in% c(1, 2, 11) ~ 1,
+    pgbetr %in% c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10) ~ 21))
+
+data <- data %>% left_join(firm_size, by = c("orgpid" = "pid", "intyear" = "syear"))
+
+rm(firm_size)
+
+```
+
+# Firm tenure
+
+```{r}
+data <- data %>% rename("firm_tenure" = "exporg")
+
+```
+
+# Last job information
+
+```{r}
+last_job <- import("./data/data_soep/biojob.dta")
+
+last_job <- last_job %>% select(pid, occljob, egp88, egp08, yearlast, stillfj, isco88, occmove)
+
+last_job[last_job < 0] <- NA
+
+data <- data %>% left_join(last_job, by = c("orgpid" = "pid"))
+
+rm(last_job)
+
+last_job <- import("./data/data_soep/pgen.dta")
+
+last_job <- last_job %>% select(pid, syear, pgegp88)
+
+data <- data %>% left_join(last_job, by = c("orgpid" = "pid", "intyear" = "syear"))
+
+rm(last_job)
+
+```
+
+# Self-employment
+```{r}
+data <- data %>% rename("self_employed" = "selfemp")
+
+```
+
+# Employment status last year
+
+```{r}
+#bio_spell <- import("./data/data_soep/pbiospe.dta")
+
+#bio_spell <- bio_spell %>%
+#  group_by(pid, spellnr) %>%
+#  rowwise() %>% 
+#  do(data.frame(orgpid = .$pid, intyear = .$beginy:.$endy, spelltyp = .$spelltyp)) %>%
+#  mutate(
+#    intyear = intyear + 1,
+#    employment_status_lead = case_when(
+#    spelltyp %in% c("3", "4", "5") ~ "Employed",
+#    spelltyp %in% c("6") ~ "Unemployed",
+#    spelltyp %in% c("8") ~ "Retired",
+#    spelltyp %in% c("1", "2", "7", "9") ~ "Inactive")) %>%
+#  select(orgpid, intyear, employment_status_lead)
+
+#data <- data %>% left_join(bio_spell, by = c("orgpid", "intyear"))
+
+#rm(bio_spell)
+
+```
+
+# ESEC class
+
+```{r}
+esec_scheme <- read.xlsx("data/other_files/esec_scheme.xlsx") %>%
+  mutate(across(everything(), as.character)) %>%
+  pivot_longer(cols = 3:8, names_to = "group", values_to = "esec_class") %>%
+  select(isco = 1, isco_title = 2, group, esec_class)
+
+data <- data %>%
+  mutate(
+    isco = substr(ifelse(is.na(isco08_4) & occmove == 1, isco88, isco08_4), 1, 3),
+    group = case_when(
+      self_employed == 1 & firm_size %in% c("None") ~ "seno",
+      self_employed == 1 & firm_size %in% c("Less than 10") ~ "se<10",
+      self_employed == 1 & firm_size %in% c("11 to 199", "200 to 1999", "More than 2000") ~ "se10+",
+      self_employed == 0 ~ "emp")) %>%
+  left_join(esec_scheme, by = c("isco", "group"))
+
+data <- data %>%
+  mutate(esec_class_7 = case_when(
+    esec_class %in% c(1, 2) ~ "Higher salariat",
+    esec_class %in% c(2) ~ "Lower salariat",
+    esec_class %in% c(3, 6) ~ "Intermediate employee",
+    esec_class %in% c(4, 5) ~ "Small employers and self-employed",
+    esec_class %in% c(7) ~ "Lower grade white collar",
+    esec_class %in% c(8) ~ "Skilled workers",
+    esec_class %in% c(9) ~ "Semi- and un-skilled workers"))
+
+data <- data %>%
+  mutate(esec_class_5 = case_when(
+    esec_class %in% c(1, 2) ~ "Salariat",
+    esec_class %in% c(3, 6) ~ "Intermediate employee",
+    esec_class %in% c(4, 5) ~ "Small employers and self-employed",
+    esec_class %in% c(7) ~ "Lower grade white collar",
+    esec_class %in% c(8, 9) ~ "Lower technical and routine occupations"))
+
+rm(esec_scheme)
+
+```
+
+```{r}
+data <- data %>% 
+  mutate(eseg_class = as.character(substr(isco, 1, 1)),
+         eseg_class_title = case_when(
+           eseg_class %in% c("1") ~ "(1) Managers",
+           eseg_class %in% c("2") ~ "(2) Professionals",
+           eseg_class %in% c("3", "4", "5", "6", "7", "8", "9") & self_employed == 1 ~ "(4) Small entrepreneurs",
+           eseg_class %in% c("3") ~ "(3) Technicians and associate professional employees",
+           eseg_class %in% c("4") ~ "(5) Clerks and skilled service employees",
+           eseg_class %in% c("7", "8") ~ "(6) Skilled industrial employees",
+           eseg_class %in% c("5", "6", "9") ~ "(7) Lower status employees"),
+         eseg_class = case_when(
+           eseg_class %in% c("1") ~ "1",
+           eseg_class %in% c("2") ~ "2",
+           eseg_class %in% c("3", "4", "5", "6", "7", "8", "9") & self_employed == 1 ~ "4",
+           eseg_class %in% c("3") ~ "3",
+           eseg_class %in% c("4") ~ "5",
+           eseg_class %in% c("7", "8") ~ "6",
+           eseg_class %in% c("5", "6", "9") ~ "7"))
+
+```
+
+```{r}
+data <- data %>% 
+  mutate(eseg_class_2 = as.character(substr(isco, 1, 2)),
+         isco_1 = as.character(substr(isco, 1, 1)),
+         eseg_class_2 = case_when(
+           
+           eseg_class_2 %in% c("11", "12", "13") & self_employed == 1 ~ "11",
+           eseg_class_2 %in% c("14") & self_employed == 1 ~ "12",
+           eseg_class_2 %in% c("92") & self_employed == 1 ~ "41",
+           isco_1 %in% c("6") & self_employed == 1 ~ "41",
+           isco_1 %in% c("3", "4", "5") & self_employed == 1 ~ "42",
+           isco_1 %in% c("7", "8", "9") & self_employed == 1 ~ "43",
+           
+           
+           eseg_class_2 %in% c("11", "12", "13") ~ "13",
+           eseg_class_2 %in% c("14") ~ "13",
+           isco_1 %in% c("1") ~ "14",
+           
+           eseg_class_2 %in% c("21", "25") ~ "21",
+           eseg_class_2 %in% c("22") ~ "22",
+           eseg_class_2 %in% c("24") ~ "23",
+           eseg_class_2 %in% c("26") ~ "24",
+           eseg_class_2 %in% c("23") ~ "25",
+           
+           eseg_class_2 %in% c("31", "35") ~ "31",
+           eseg_class_2 %in% c("32") ~ "32",
+           eseg_class_2 %in% c("33") ~ "33",
+           eseg_class_2 %in% c("34") ~ "34",
+           eseg_class %in% c("2") ~ "35",
+           
+           eseg_class_2 %in% c("41", "43", "44") ~ "51",
+           eseg_class_2 %in% c("42") ~ "52",
+           eseg_class_2 %in% c("53") ~ "53",
+           eseg_class_2 %in% c("54") ~ "54",
+           eseg_class %in% c("3") ~ "54",
+           
+           eseg_class_2 %in% c("71") ~ "61",
+           eseg_class_2 %in% c("75") ~ "62",
+           eseg_class_2 %in% c("72", "73", "74") ~ "63",
+           eseg_class_2 %in% c("81", "82") ~ "64",
+           eseg_class_2 %in% c("83") ~ "65",
+           
+           eseg_class_2 %in% c("51", "52") ~ "71",
+           eseg_class_2 %in% c("93", "94", "96") ~ "72",
+           eseg_class_2 %in% c("91", "95") ~ "73",
+           isco_1 %in% c("6") ~ "74",
+           eseg_class_2 %in% c("92") ~ "74"))
+
+
+```
+
+```{r}
+data <- data %>% 
+  mutate(occupation_group_1 = as.character(substr(isco, 1, 1)),
+         occupation_group_1_title = case_when(
+           occupation_group_1 %in% c("1") ~ "Managers",
+           occupation_group_1 %in% c("2") ~ "Professionals",
+           occupation_group_1 %in% c("3") ~ "Technicians and Associate Professionals",
+           occupation_group_1 %in% c("4") ~ "Clerical Support Workers",
+           occupation_group_1 %in% c("5") ~ "Service and Sales Workers",
+           occupation_group_1 %in% c("6") ~ "Skilled Agricultural, Forestry and Fishery Workers",
+           occupation_group_1 %in% c("7") ~ "Craft and Related Trades Workers",
+           occupation_group_1 %in% c("8") ~ "Plant and Machine Operators, and Assemblers",
+           occupation_group_1 %in% c("9") ~ "Elementary Occupations",
+           occupation_group_1 %in% c("10") ~ "Armed Forces Occupations"))
+
+data <- data %>% 
+  mutate(occupation_group_2 = as.character(substr(isco, 1, 2)),
+         occupation_group_2_title = case_when(
+           occupation_group_2 %in% c("11") ~ "Chief Executives, Senior Officials and Legislators",
+           occupation_group_2 %in% c("12") ~ "Administrative and Commercial Managers",
+           occupation_group_2 %in% c("13") ~ "Production and Specialized Services Managers",
+           occupation_group_2 %in% c("14") ~ "Hospitality, Retail and Other Services Managers",
+           occupation_group_2 %in% c("21") ~ "Science and Engineering Professionals",
+           occupation_group_2 %in% c("22") ~ "Health Professionals",
+           occupation_group_2 %in% c("23") ~ "Teaching Professionals",
+           occupation_group_2 %in% c("24") ~ "Business and Administration Professionals",
+           occupation_group_2 %in% c("25") ~ "Information and Communications Technology Professionals",
+           occupation_group_2 %in% c("26") ~ "Legal, Social and Cultural Professionals",
+           occupation_group_2 %in% c("31") ~ "Science and Engineering Associate Professionals",
+           occupation_group_2 %in% c("32") ~ "Health Associate Professionals",
+           occupation_group_2 %in% c("33") ~ "Business and Administration Associate Professionals",
+           occupation_group_2 %in% c("34") ~ "Legal, Social, Cultural and Related Associate Professionals",
+           occupation_group_2 %in% c("35") ~ "Information and Communications Technicians",
+           occupation_group_2 %in% c("41") ~ "General and Keyboard Clerks",
+           occupation_group_2 %in% c("42") ~ "Customer Services Clerks",
+           occupation_group_2 %in% c("43") ~ "Numerical and Material Recording Clerks",
+           occupation_group_2 %in% c("44") ~ "Other Clerical Support Workers",
+           occupation_group_2 %in% c("51") ~ "Personal Service Workers",
+           occupation_group_2 %in% c("52") ~ "Sales Workers",
+           occupation_group_2 %in% c("53") ~ "Personal Care Workers",
+           occupation_group_2 %in% c("54") ~ "Protective Services Workers",
+           occupation_group_2 %in% c("61") ~ "Market-oriented Skilled Agricultural Workers",
+           occupation_group_2 %in% c("62") ~ "Market-Oriented Skilled Forestry, Fishery and Hunting Workers",
+           occupation_group_2 %in% c("63") ~ "Subsistence Farmers, Fishers, Hunters and Gatherers",
+           occupation_group_2 %in% c("71") ~ "Building and Related Trades Workers (excluding Electricians)",
+           occupation_group_2 %in% c("72") ~ "Metal, Machinery and Related Trades Workers",
+           occupation_group_2 %in% c("73") ~ "Handicraft and Printing Workers",
+           occupation_group_2 %in% c("74") ~ "Electrical and Electronics Trades Workers",
+           occupation_group_2 %in% c("75") ~ "Food Processing, Woodworking, Garment and Other Craft and Related Trades Workers",
+           occupation_group_2 %in% c("81") ~ "Stationary Plant and Machine Operators",
+           occupation_group_2 %in% c("82") ~ "Assemblers",
+           occupation_group_2 %in% c("83") ~ "Drivers and Mobile Plant Operators",
+           occupation_group_2 %in% c("91") ~ "Cleaners and Helpers",
+           occupation_group_2 %in% c("92") ~ "Agricultural, Forestry and Fishery Labourers",
+           occupation_group_2 %in% c("93") ~ "Labourers in Mining, Construction, Manufacturing and Transport",
+           occupation_group_2 %in% c("94") ~ "Food Preparation Assistants",
+           occupation_group_2 %in% c("95") ~ "Street and Related Sales and Service Workers",
+           occupation_group_2 %in% c("96") ~ "Refuse Workers and Other Elementary Workers",
+           occupation_group_2 %in% c("10") ~ "Commissioned Armed forces Officers",
+           occupation_group_2 %in% c("10") ~ "Non-commissioned Armed Forces Officers",
+           occupation_group_2 %in% c("10") ~ "Armed Forces Occupations, Other Ranks"))
+
+```
+
+```{r}
+weights <- import("./data/data_soep/ppathl.dta")
+
+weights <- weights %>% select(pid, syear, phrf)
+
+weights <- weights %>% mutate(sampling_weight = phrf / 1000)
+
+data <- data %>% left_join(weights, by = c("orgpid" = "pid", "intyear" = "syear"))
+
+rm(weights)
+
+```
+
+```{r}
+data <- data %>%
+  group_by(orgpid) %>%
+  arrange(orgpid, age) %>%
+  mutate(employment_status_next_year = lead(employment_status, 1),
+         sampling_weight = lead(sampling_weight, 1)) %>%
+  filter(!is.na(employment_status_next_year))
+
+data$age <- data$age + 1          # due to lagging of all variables except outcome
+data$intyear <- data$intyear + 1  # due to lagging of all variables except outcome
+
+```
+
+```{r}
+data <- data %>% rename("year" = "intyear")
+
+data <- data %>%
+  mutate(
+    age = as.character(age),
+    year = as.character(year),
+    birth_year = as.factor(birth_year),
+    cohort = as.factor(cohort),
+    female = as.factor(female),
+    region = as.factor(region),
+    disability = as.character(disability),
+    urban_residence = as.factor(urban_residence),
+    education_level = as.factor(education_level),
+    marital_status = as.factor(marital_status),
+    partner_in_hh = as.factor(partner_in_hh),
+    n_children = as.factor(n_children),
+    foreign_born = as.factor(foreign_born), 
+    public_sector = as.factor(public_sector),
+    employment_status = as.factor(employment_status), 
+    employment_status_next_year = as.factor(employment_status_next_year),
+    eseg_class = as.factor(eseg_class),
+    eseg_class_2 = as.factor(eseg_class_2),
+    eseg_class_title = as.factor(eseg_class_title),
+    occupation_group_1 = as.factor(occupation_group_1), 
+    occupation_group_1_title = as.factor(occupation_group_1_title),
+    occupation_group_2 = as.factor(occupation_group_2), 
+    occupation_group_2_title = as.factor(occupation_group_2_title))
+
+data <- data %>% group_by(orgpid) %>% fill(c(eseg_class, eseg_class_2, eseg_class_title, self_employed, public_sector), .direction = "down")
+
+data <- data %>% select(orgpid, age, year, female, employment_status, employment_status_next_year, eseg_class, eseg_class_title, eseg_class_2, region, urban_residence, education_level, disability, marital_status, hh_size, partner_in_hh, n_children, foreign_born, lm_expr_ft, lm_expr_pt, sampling_weight)
+
+data <- data %>% group_by(orgpid, age) %>% slice(1) %>% ungroup()
+
+```
+
+```{r}
+data_final <- data %>% filter(age %in% c(55:64))
+
+data_final <- data_final %>% filter(year %in% c(1991:2020))
+
+data_final <- data_final %>% filter((lm_expr_ft + lm_expr_pt) != 0)
+
+rm(data)
+
+```
+
+```{r}
+save.image("data/data_preprocessed.Rdata")
+
+```
+
+```{r}
+
+```
